@@ -1,0 +1,15 @@
+transformers
+SpeechRecognition
+PyAudio
+openai
+langchain
+langchain-openai
+langchain_community
+langchain-community
+python-dotenv
+pypdf
+fpdf
+tiktoken
+chromadb
+PyQt6
+google-cloud-speech
