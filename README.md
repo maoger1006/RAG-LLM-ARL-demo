@@ -7,7 +7,7 @@ Create a virtual env with Python:
 2. Once the env is created it can be activated using "conda activate achilles"
 3. run "pip install -r requirements.txt"
 4. run "gui_beta.py"
-5. Paste the OPENAI api in .env, and create ./api folder, put the google credentials into it.
+
 
 Notice: 
 Before Uploading doc, pptx, xls file, please save and your other opened works for safety.
