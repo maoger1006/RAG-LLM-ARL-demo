@@ -22,7 +22,6 @@ PyQt6
 PyQt6_sip
 python-dotenv
 pyttsx3
-pywin32
 Requests
 SpeechRecognition
 transformers
