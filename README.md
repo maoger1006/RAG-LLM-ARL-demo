@@ -28,6 +28,11 @@
 
 > **Notice** – Before uploading `.docx`, `.pptx`, or `.xlsx` files, save and close any other work to avoid data‑loss.
 
+> **Notice** - If show error: Error loading transcription into LLM: Descriptors cannot be created directly. If this call came from a _pb2.py file, your generated code is out of date and must be regenerated with protoc >= 3.19.0. If you cannot immediately regenerate your protos, some other possible workarounds are: 1. Downgrade the protobuf package to 3.20.x or lower. 2. Set PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python (but this will use pure-Python parsing and will be much slower).
+>```bash
+>pip uninstall protobuf
+>pip install protobuf==3.20.0
+>```
 ---
 
 ## Running on Ubuntu 20.04 – 24.04 (and other Debian‑based distros)
