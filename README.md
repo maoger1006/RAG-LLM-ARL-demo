@@ -94,8 +94,8 @@ version below once per clone:
     Save the file – no other modules need to change.
 
 ```python
-   # file_conversion/office_2_pdf.py
-   import subprocess
+# file_conversion/office_2_pdf.py
+import subprocess
 import shlex
 from pathlib import Path
 import shutil
@@ -201,11 +201,6 @@ def save_output(rendered: BaseModel, output_dir: str, fname_base: str):
     with open(os.path.join(output_dir, f"{fname_base}.{ext}"), "w+",
               encoding=settings.OUTPUT_ENCODING) as f:
         f.write(text)
-
-    # Skip metadata JSON to reduce clutter
-    # with open(os.path.join(output_dir, f"{fname_base}_meta.json"), "w+",
-    #           encoding=settings.OUTPUT_ENCODING) as f:
-    #     f.write(json.dumps(rendered.metadata, indent=2))
 
     for img_name, img in images.items():
         img.save(os.path.join(output_dir, f"{fname_base}{img_name}"),
