@@ -1,76 +1,64 @@
-from PyQt6.QtWidgets import QFileDialog
-
-import os
+   # file_conversion/office_2_pdf.py
+import subprocess
+import shlex
+from pathlib import Path
 import shutil
+from fpdf import FPDF   # already in requirements
 
-from docx2pdf import convert
-from fpdf import FPDF
-import win32com.client
+def office_to_pdf(file_path: str, destination_dir: str = "./source") -> Path:
+    """
+    Convert an Office, PowerPoint, Excel or plain-text file to PDF on Linux/macOS.
+    Uses LibreOffice (--headless --convert-to pdf) for everything except .txt,
+    which is rendered with FPDF.  Returns the final PDF Path.
 
+    Dependencies (Ubuntu):
+        sudo apt install libreoffice libreoffice-core libreoffice-writer libreoffice-calc libreoffice-impress
+        sudo apt install fonts-liberation   # avoids blank glyphs in PDFs
+    """
+    in_path = Path(file_path).expanduser().resolve()
+    if not in_path.exists():
+        raise FileNotFoundError(in_path)
 
-def office_2_pdf(file_path):
-    """Convert Office documents to PDF."""
-    # Get the file path
-    print ("come into office_2_pdf")
-    # Get the file extension
-    _, file_extension = os.path.splitext(file_path)
+    ext = in_path.suffix.lower()
+    out_dir = in_path.parent        # LibreOffice writes here by default
+    pdf_path = in_path.with_suffix(".pdf")
 
     try:
-        # Convert Word documents to PDF
-        if file_extension == ".docx":
-            convert(file_path)
-            
-        elif file_extension == ".txt":
+        # ── 1. Plain-text → PDF with FPDF ────────────────────────────────
+        if ext == ".txt":
             pdf = FPDF()
+            pdf.set_auto_page_break(auto=True, margin=15)
             pdf.add_page()
-            pdf.set_font("Arial", size=12)  # Use built-in font that supports Latin-1
+            pdf.set_font("Helvetica", size=12)
 
-            with open(file_path, "r", encoding="utf-8") as txt_file:
-                for line in txt_file:
-                    # Encode using Latin-1 and ignore unsupported characters, then decode back.
-                    safe_line = line.encode("latin-1", errors="ignore").decode("latin-1")
-                    pdf.multi_cell(0, 10, txt=safe_line.strip())
+            with open(in_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    safe = line.encode("latin-1", errors="ignore").decode("latin-1")
+                    pdf.multi_cell(0, 8, txt=safe.strip())
 
-            pdf_output = os.path.splitext(file_path)[0] + ".pdf"
-            pdf.output(pdf_output)
-            
-            
+            pdf.output(str(pdf_path))
 
-        # Convert Excel documents to PDF
-        elif file_extension == ".xlsx":
-            file_path = os.path.abspath(file_path)
-            excel = win32com.client.Dispatch("Excel.Application")
-            excel.Visible = False
-            wb = excel.Workbooks.Open(file_path)
-            wb.SaveAs(os.path.splitext(file_path)[0] + ".pdf", FileFormat=57)
-            wb.Close()
-            excel.Quit()
-
-        # Convert PowerPoint documents to PDF
-        elif file_extension == ".pptx":
-           
-            file_path = os.path.abspath(file_path)
-            powerpoint = win32com.client.Dispatch("PowerPoint.Application")
-            
-            presentation = powerpoint.Presentations.Open(file_path)
-            
-            pdf_output = os.path.splitext(file_path)[0] + ".pdf"
-            
-            presentation.SaveAs(pdf_output, 32)  # 32表示PDF格式
-            presentation.Close()
-            powerpoint.Quit()
-            
-
-        # Move the PDF to the 'source' directory
-        pdf_file = os.path.splitext(file_path)[0] + ".pdf"
-        
-        if os.path.exists(pdf_file):
-            destination_dir = "./source"
-            os.makedirs(destination_dir, exist_ok=True)
-            shutil.move(pdf_file, os.path.join(destination_dir, os.path.basename(pdf_file)))
-            print(f"PDF moved to {destination_dir}")
+        # ── 2. All other Office docs → PDF with LibreOffice ──────────────
         else:
-            print(f"PDF file {pdf_file} not found.")
-    
+            # libreoffice --headless --convert-to pdf <file> --outdir <dir>
+            cmd = (
+                "libreoffice --headless --convert-to pdf "
+                f"{shlex.quote(str(in_path))} --outdir {shlex.quote(str(out_dir))}"
+            )
+            result = subprocess.run(
+                cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr.decode() or result.stdout.decode())
+
+        # ── 3. Move PDF into ./source/  ───────────────────────────────────
+        dest_dir = Path(destination_dir).resolve()
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        final_path = dest_dir / pdf_path.name
+        shutil.move(pdf_path, final_path)
+
+        print(f"PDF created → {final_path}")
+        return final_path
+
     except Exception as e:
-        print(f"Error converting file to PDF: {e}")
+        raise RuntimeError(f"Error converting {in_path.name} → PDF: {e}") from e
