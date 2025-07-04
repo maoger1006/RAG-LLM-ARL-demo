@@ -468,20 +468,20 @@ def clear_source_directory():
     for d in directories:
         safe_delete_dir(d)
 
-def clean_server_workdir(server_ip="10.160.200.119", port=8000):
+def clean_server_workdir(server_ip="xxxxxxxxx", port=8000):
     url = f"http://{server_ip}:{port}/clean_workdir"
     try:
-        r = requests.post(url, timeout=2)  # 可以加个超时秒数，2秒连不上就算了
+        r = requests.post(url, timeout=2)  
         return r.json()
     except requests.exceptions.RequestException as e:
         print(f"[Warning] Could not connect to server: {e}")
         return None
 
-def get_videorag_answer(question, server_ip="10.160.200.119", port=8000):
+def get_videorag_answer(question, server_ip="xxxxxxxxx", port=8000):
     url = f"http://{server_ip}:{port}/query"
     payload = {"question": question}
     try:
-        r = requests.post(url, data=payload, timeout=120)
+        r = requests.post(url, data=payload, timeout=120) #timeout
         return r.json()
     except requests.exceptions.RequestException as e:
         print(f"[Warning] Could not connect to server: {e}")
