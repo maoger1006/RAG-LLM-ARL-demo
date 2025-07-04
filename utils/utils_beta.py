@@ -14,6 +14,7 @@ import cv2
 import time
 import stat
 from PyQt6.QtMultimedia import QAudioOutput, QMediaDevices, QAudioFormat
+import requests
 
 
 def upload_mp4_with_roi(file_path):
@@ -146,8 +147,6 @@ class VideoPreviewDialog(QDialog):
         return self.roi
     
     
-
-
 def init_ui(instance):
     """Initialize the user interface."""
     # Main layout
@@ -214,6 +213,11 @@ def init_ui(instance):
     instance.summary_button.setStyleSheet("font-size:14px; background-color: lightgrey; color:black;")
     instance.summary_button.clicked.connect(instance.video_summary)
     control_frame_layout.addWidget(instance.summary_button)
+
+    instance.VideoRAG_button = QPushButton("Video RAG")
+    instance.VideoRAG_button.setStyleSheet("font-size:14px; background-color: lightgrey; color:black;")
+    instance.VideoRAG_button.clicked.connect(instance.VideoRAG_manage)
+    control_frame_layout.addWidget(instance.VideoRAG_button)    
     
 
     instance.exit_button = QPushButton("Exit")
@@ -311,12 +315,23 @@ def init_ui(instance):
 
     # Radio buttons for response type: if need retrieval
     instance.need_retrival_button = QRadioButton("Vector Retrieval (Adaptive)")
+    
+    instance.video_rag_answer_button = QRadioButton("Video-RAG Retrieval")
+    
+    instance.mode_button_group = QButtonGroup()
+    instance.mode_button_group.addButton(instance.need_retrival_button)
+    instance.mode_button_group.addButton(instance.video_rag_answer_button)
+
     instance.need_retrival_button.setChecked(True)  # Default option
     # instance.need_retrival_button.toggled.connect(instance.set_response_type)
     question_layout.addWidget(instance.need_retrival_button, 0, 3)
     
     # Radio buttons for the Graph Retrieval Retrieval
-    instance.graph_retrieval_button = QRadioButton("Graph Retrieval")
+    # instance.graph_retrieval_button = QRadioButton("Graph Retrieval")
+    # question_layout.addWidget(instance.graph_retrieval_button, 0, 4)
+
+    # Add Video-RAG answer radio button
+    question_layout.addWidget(instance.video_rag_answer_button, 0, 4)
     
     
     
@@ -415,7 +430,6 @@ def append_Video(head_name, message, video_parser_area):
     
 
 
-
 def force_remove_readonly(func, path, exc_info):
     """
     Delete a read-only file by changing its permissions.
@@ -453,7 +467,26 @@ def clear_source_directory():
     directories = ["./source/", "./docs/"]
     for d in directories:
         safe_delete_dir(d)
-            
+
+def clean_server_workdir(server_ip="10.160.200.119", port=8000):
+    url = f"http://{server_ip}:{port}/clean_workdir"
+    try:
+        r = requests.post(url, timeout=2)  # 可以加个超时秒数，2秒连不上就算了
+        return r.json()
+    except requests.exceptions.RequestException as e:
+        print(f"[Warning] Could not connect to server: {e}")
+        return None
+
+def get_videorag_answer(question, server_ip="10.160.200.119", port=8000):
+    url = f"http://{server_ip}:{port}/query"
+    payload = {"question": question}
+    try:
+        r = requests.post(url, data=payload, timeout=120)
+        return r.json()
+    except requests.exceptions.RequestException as e:
+        print(f"[Warning] Could not connect to server: {e}")
+        return None
+
 def save_transcription(history_transcript, current_chunk_number):
     """Save the transcription to a PDF file."""
     pdf = FPDF()

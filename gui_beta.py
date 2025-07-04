@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import threading
 
@@ -26,16 +27,19 @@ from answer_request.llm_direct_response import llm_direct_response
 import shutil  
 import file_conversion.Imagett as Imagett
 import file_conversion.office_2_pdf as office_2_pdf
-import file_conversion.video_process as video_process
+from file_conversion.video_process_async import process_video_combined_async
 
 import pyttsx3  # Text-to-Speech library
-from utils.utils_beta import append_system_message, append_recognition_speaker,append_recognition_user, append_recognition, clear_source_directory, save_transcription, init_ui, OverlayWidget, VideoPreviewDialog, upload_mp4_with_roi, append_Video, append_conversation
+from utils.utils_beta import (append_system_message, append_recognition_speaker,append_recognition_user, append_recognition, clear_source_directory, save_transcription, init_ui, get_videorag_answer,
+                                OverlayWidget, VideoPreviewDialog, upload_mp4_with_roi, append_Video, append_conversation, clean_server_workdir)
 
 from file_conversion.pdf_split import extract_text_and_images
 from file_conversion.video_process_realtime import VideoProcessingThread
 from file_conversion.audio_in_video_real_unlimit import RealTimeStreamingTranscriptionThread
 from stt_functions.openai_tts import speak_text_thread
 from answer_request.video_summary import VideoSummaryThread
+from VideoRAG.Video_pipeline import VideoUploadThread
+import requests
 
 
 class ConvoAid(QWidget):
@@ -122,10 +126,24 @@ class ConvoAid(QWidget):
         summary_shortcut = QShortcut(QKeySequence(Qt.Key.Key_S), self)
         summary_shortcut.activated.connect(self.summary_button.click)  # summary button
         
-                
+
         # RAG similarity threshold                
         self.RAG_thresh = 0.5 
         
+#################### Video RAG Management Functions ########################
+
+    def VideoRAG_manage(self):
+        
+        file_dialog = QFileDialog()
+        video_path, _ = file_dialog.getOpenFileName(self, "Select File", "./source", " mp4 Files (*.mp4);;All Files (*)")
+
+        self.upload_thread = VideoUploadThread(video_path)
+        # self.upload_thread.finished.connect(self.handle_upload_success)
+        # self.upload_thread.error.connect(self.handle_upload_error)
+        self.upload_thread.start()
+
+           
+#################### Video Summary and Video Parser Functions #######################           
     def video_summary(self):
         self.video_summary_thread = VideoSummaryThread(self.video_path)
         self.video_summary_thread.status_update.connect(lambda msg: print(msg))  
@@ -182,7 +200,7 @@ class ConvoAid(QWidget):
         self.transcription_thread.start()
                
 
-    # upload the file to the RAG pipeline
+ ################## upload the file to the RAG pipeline #####################
     def ask_llm(self):
         """Initialize the LLM process."""
         self.submit_question_button.setEnabled(True)
@@ -277,7 +295,6 @@ class ConvoAid(QWidget):
                 
         if self.need_retrival_button.isChecked():
             # Use the RAG pipeline to generate an answer
-            
             try:
                 if not self.loaded_files:
                     # if no files loaded, directly get the answer from the LLM
@@ -287,7 +304,7 @@ class ConvoAid(QWidget):
                     elif self.response_type == "detail mode":
                         formatted_question = f"{self.format_question_with_history(user_question=question, history_length=self.history_length)} Give me a clear answer within 2 or 3 sentences. First find answer in history transcription, if no include, then you answer freely."
     
-                
+                    
                     answer = llm_direct_response(formatted_question)
                 
                     self.history_text.append(f"Answer: {answer}")  # Append the answer to the history text
@@ -358,33 +375,51 @@ class ConvoAid(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Error generating answer: {e}")
         
-        else:
+        # else:  # if need_retrieval_button is not checked, we directly get the answer from the LLM
 
-            # Directly get the answer from the LLM
+        #     # Directly get the answer from the LLM
+        #     try:
+                
+        #         if  self.response_type == "concise mode":
+        #             formatted_question = f"{self.format_question_with_history(user_question=question, history_length=self.history_length)}. Must give me a clear answer within 5 words (no nessecary to be a sentence). First find answer in history transcription, if no include, then you answer freely."
+    
+        #         elif self.response_type == "detail mode":
+        #             formatted_question = f"{self.format_question_with_history(user_question=question, history_length=self.history_length)} Give me a clear answer within 2 or 3 sentences. First find answer in history transcription, if no include, then you answer freely."
+    
+                
+        #         answer = llm_direct_response(formatted_question)
+                
+        #         self.history_text.append(f"Answer: {answer}")  # Append the answer to the history text
+
+        #         append_conversation(self.QA_area, question, answer)
+                
+        #         print (f"formatted question is:\n{formatted_question}")
+                
+        #         # Display the question and answer
+
+        #         self.question_entry.clear()
+                
+        #     except Exception as e:
+        #         QMessageBox.critical(self, "Error", f"Error generating answer: {e}")
+        
+        elif self.video_rag_answer_button.isChecked():
             try:
                 
-                if  self.response_type == "concise mode":
-                    formatted_question = f"{self.format_question_with_history(user_question=question, history_length=self.history_length)}. Must give me a clear answer within 5 words (no nessecary to be a sentence). First find answer in history transcription, if no include, then you answer freely."
-    
-                elif self.response_type == "detail mode":
-                    formatted_question = f"{self.format_question_with_history(user_question=question, history_length=self.history_length)} Give me a clear answer within 2 or 3 sentences. First find answer in history transcription, if no include, then you answer freely."
-    
-                
-                answer = llm_direct_response(formatted_question)
+                formatted_question = f"{self.format_question_with_history(user_question=question, history_length=self.history_length)}. Must give me a clear answer within 5 words (no nessecary to be a sentence). First find answer in history transcription, if no include, then you answer freely."
+
+                answer = get_videorag_answer(formatted_question)
                 
                 self.history_text.append(f"Answer: {answer}")  # Append the answer to the history text
 
                 append_conversation(self.QA_area, question, answer)
-                
-                print (f"formatted question is:\n{formatted_question}")
-                
-                # Display the question and answer
 
-                self.question_entry.clear()
+                print (f"formatted question is:\n{formatted_question}")
+                print("adaptive RAG not used, no files loaded.")
                 
+
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Error generating answer: {e}")
-        
+
         if self.read_aloud_button.isChecked(): 
                 speak_text_thread(answer)  # Call the text-to-speech function
 
@@ -616,8 +651,8 @@ class ConvoAid(QWidget):
             self.ask_llm()
             
         elif file_path.endswith(".mp4"):
-            coordinate_list = upload_mp4_with_roi(file_path)
-            video_process.video_transcripts_frames(file_path, coordinate_list)
+            # coordinate_list = upload_mp4_with_roi(file_path)
+            asyncio.run(process_video_combined_async(file_path))  # Process the video file asynchronously
             self.ask_llm()
             
 
@@ -674,7 +709,8 @@ class ConvoAid(QWidget):
         if self.toggle_conv_button.isChecked():
             # When checked, we want to start STT.
             self.toggle_conv_button.setText("Stop Conversation")
-            self.start_conversation()
+            if not self.stt_running:     # flag to check if STT is running (STT or conversation)
+                self.start_conversation()
         else:
             # When unchecked, stop STT.
             self.toggle_conv_button.setText("Start Conversation")
@@ -682,11 +718,12 @@ class ConvoAid(QWidget):
 
 
     def closeEvent(self, event):
-        """Handle the window close event."""
-        # Call the function to clear the source directory
         clear_source_directory()
-
-        # Accept the close event (exit the application)
+        result = clean_server_workdir()
+        if result is None:
+            print("Server not connected, skip remote cleanup.")
+        else:
+            print("Remote server cleanup success:", result)
         event.accept()
                         
 
