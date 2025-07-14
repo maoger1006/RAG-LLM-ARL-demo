@@ -174,7 +174,7 @@ def init_ui(instance):
     control_frame_layout.addWidget(instance.toggle_stt_button)
     
     # Conversation Mode button
-    instance.toggle_conv_button = QPushButton("Start Conversation")
+    instance.toggle_conv_button = QPushButton("Talk with AI (Emotion Detection)")
     instance.toggle_conv_button.setStyleSheet("font-size:14px; background-color: lightgrey; color:black;")
     instance.toggle_conv_button.setCheckable(True)  # Make it toggleable
     instance.toggle_conv_button.clicked.connect(instance.toggle_conversation)
@@ -429,7 +429,6 @@ def append_Video(head_name, message, video_parser_area):
     video_parser_area.append(message_html)   
     
 
-
 def force_remove_readonly(func, path, exc_info):
     """
     Delete a read-only file by changing its permissions.
@@ -468,7 +467,7 @@ def clear_source_directory():
     for d in directories:
         safe_delete_dir(d)
 
-def clean_server_workdir(server_ip="xxxxxxxxx", port=8000):
+def clean_server_workdir(server_ip="", port=8000):
     url = f"http://{server_ip}:{port}/clean_workdir"
     try:
         r = requests.post(url, timeout=2)  
@@ -477,7 +476,7 @@ def clean_server_workdir(server_ip="xxxxxxxxx", port=8000):
         print(f"[Warning] Could not connect to server: {e}")
         return None
 
-def get_videorag_answer(question, server_ip="xxxxxxxxx", port=8000):
+def get_videorag_answer(question, server_ip="", port=8000):
     url = f"http://{server_ip}:{port}/query"
     payload = {"question": question}
     try:

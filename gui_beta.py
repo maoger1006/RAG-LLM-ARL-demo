@@ -20,8 +20,8 @@ from stt_functions.stt_recognition import listen_and_recognize_multi, stop_liste
 
 from stt_functions.speech_realtime_unlimit_sep1 import  stop_recognition_sep, continuous_recognition_sep
 
-from stt_functions.speech_realtime_unlimit import recog_stream, stop_recognition, continuous_recognition
-
+# from stt_functions.speech_realtime_unlimit import recog_stream, stop_recognition, continuous_recognition
+from stt_functions.speech_realtime_emotion import stop_recognition, continuous_recognition
 from stt_functions.content_correct import content_correct
 from answer_request.llm_direct_response import llm_direct_response
 import shutil  
@@ -69,7 +69,7 @@ class ConvoAid(QWidget):
         self.loaded_files  = {}   # record the files that already in the source file
         self.history_text = []  # history conversation awareness
     
-        
+    
         self.recognized_text_Signal_stt.connect(lambda message: append_recognition(message, self.Transcripts_area))
         
         self.recognized_text_Signal_dialog.connect(self.question_entry.setText)  # Connect signal to update question bar
@@ -126,7 +126,6 @@ class ConvoAid(QWidget):
         summary_shortcut = QShortcut(QKeySequence(Qt.Key.Key_S), self)
         summary_shortcut.activated.connect(self.summary_button.click)  # summary button
         
-
         # RAG similarity threshold                
         self.RAG_thresh = 0.5 
         
@@ -299,7 +298,7 @@ class ConvoAid(QWidget):
                 if not self.loaded_files:
                     # if no files loaded, directly get the answer from the LLM
                     if  self.response_type == "concise mode":
-                        formatted_question = f"{self.format_question_with_history(user_question=question, history_length=self.history_length)}. Must give me a clear answer within 5 words (no nessecary to be a sentence). First find answer in history transcription, if no include, then you answer freely."
+                        formatted_question = f"{self.format_question_with_history(user_question=question, history_length=self.history_length)}. Must give me a clear answer as concise as you can (no nessecary to be a sentence). First find answer in history transcription, if no include, then you answer freely."
     
                     elif self.response_type == "detail mode":
                         formatted_question = f"{self.format_question_with_history(user_question=question, history_length=self.history_length)} Give me a clear answer within 2 or 3 sentences. First find answer in history transcription, if no include, then you answer freely."
@@ -453,7 +452,7 @@ class ConvoAid(QWidget):
         
         self.reading_text = False  # Reset flag 
                 
-############# Voice query Input Functions#########################
+############# Voice query Input Functions #########################
     def start_voice_input(self):
         if self.enter_key_pressed:
             return
@@ -578,7 +577,7 @@ class ConvoAid(QWidget):
             self.toggle_stt_button.setText("Start STT")      
 ############## Stop speech-to-text recognition #######################
 
-######Dialog block for conversation start: ###################################################
+###### Dialog block for conversation start: ###################################################
     def start_conversation(self):
         """Start the conversation process."""
         print("Starting conversation...")
@@ -609,6 +608,7 @@ class ConvoAid(QWidget):
             if not user_text:
                 return
             if not self.reading_text:   # only submit question when the text-to-speech is not running
+                print(f"Recognized text: {recognized_text}")
                 self.recognized_text_Signal_dialog.emit(recognized_text)
                 self.submitQuestionSignal.emit()   # Emit the signal to submit the question
 
