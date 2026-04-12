@@ -6,3 +6,6 @@ multi-rag.tar
 __pycache__
 ./docs
 Test_files/ucIDF_ZHdhY.mp4
+*.sh
+*.exe
+miniconda/

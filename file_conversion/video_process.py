@@ -1,3 +1,4 @@
+import argparse
 import whisper
 import os
 import cv2  # We're using OpenCV to read video, to install !pip install opencv-python
@@ -129,8 +130,21 @@ def video_transcripts_frames(file_path, coordinate_list = None):
 
   
 if __name__ == '__main__':
-    video_file = "./Test_files/Writing a Literature Review Meeting Recording.mp4"  
-    # video_transcripts(video_file)
-    video_transcripts_frames(video_file)
+    parser = argparse.ArgumentParser(description="Transcribe and summarize a single video file.")
+    parser.add_argument(
+        "video_file",
+        nargs="?",
+        default=os.getenv("VIDEO_FILE"),
+        help="Path to local video file. Can also be provided via VIDEO_FILE env var.",
+    )
+    args = parser.parse_args()
+
+    if not args.video_file:
+        raise SystemExit("Provide a video path as an argument or set VIDEO_FILE.")
+
+    if not os.path.isfile(args.video_file):
+        raise FileNotFoundError(f"Video file not found: {args.video_file}")
+
+    video_transcripts_frames(args.video_file)
 
 

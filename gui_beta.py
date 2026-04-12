@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import threading
+import os
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton, QMessageBox, 
@@ -14,14 +15,16 @@ from PyQt6.QtMultimedia import QMediaPlayer
 from RAG.rag import RAG_pipeline
 from fpdf import FPDF
 import shutil
-import os
 
-from stt_functions.stt_recognition import listen_and_recognize_multi, stop_listening_event, stt_for_query
-
-from stt_functions.speech_realtime_unlimit_sep1 import  stop_recognition_sep, continuous_recognition_sep
-
-# from stt_functions.speech_realtime_unlimit import recog_stream, stop_recognition, continuous_recognition
-from stt_functions.speech_realtime_emotion import stop_recognition, continuous_recognition
+from stt_functions.assemblyai_stt import (
+    listen_and_recognize_multi,
+    stop_listening_event,
+    stt_for_query,
+    stop_recognition_sep,
+    continuous_recognition_sep,
+    stop_recognition,
+    continuous_recognition,
+)
 from stt_functions.content_correct import content_correct
 from answer_request.llm_direct_response import llm_direct_response
 import shutil  
@@ -136,6 +139,10 @@ class ConvoAid(QWidget):
         file_dialog = QFileDialog()
         video_path, _ = file_dialog.getOpenFileName(self, "Select File", "./source", " mp4 Files (*.mp4);;All Files (*)")
 
+        if not video_path:
+            append_system_message("Video RAG upload canceled.", self.QA_area)
+            return
+
         self.upload_thread = VideoUploadThread(video_path)
         # self.upload_thread.finished.connect(self.handle_upload_success)
         # self.upload_thread.error.connect(self.handle_upload_error)
@@ -144,6 +151,10 @@ class ConvoAid(QWidget):
            
 #################### Video Summary and Video Parser Functions #######################           
     def video_summary(self):
+        if not self.video_path or not os.path.isfile(self.video_path):
+            append_system_message("No parsed video summary found. Run Video Parser first.", self.QA_area)
+            return
+
         self.video_summary_thread = VideoSummaryThread(self.video_path)
         self.video_summary_thread.status_update.connect(lambda msg: print(msg))  
         self.video_summary_thread.summary_update.connect(lambda msg: append_Video("Overall Summary", msg, self.summary_area))  # Update the overall summary area
@@ -153,6 +164,10 @@ class ConvoAid(QWidget):
     def video_parser(self):
         file_dialog = QFileDialog()
         file_path, _ = file_dialog.getOpenFileName(self, "Select File", "./source", "mp4 Files (*.mp4);;All Files (*)")
+        if not file_path:
+            append_system_message("Video parser canceled.", self.QA_area)
+            return
+
         self.video_path = "./source/" + os.path.splitext(os.path.basename(file_path))[0] + ".md"  # Store the video md for later use
         
         if file_path:
@@ -166,6 +181,9 @@ class ConvoAid(QWidget):
                 append_system_message(f"Error uploading file: {e}", self.QA_area)
         
         coordinate_list = upload_mp4_with_roi(file_path)
+        if coordinate_list is None:
+            append_system_message("Video ROI selection canceled. Parser did not start.", self.QA_area)
+            return
        
         # Process video key frames  
         self.video_thread = VideoProcessingThread(file_path,self.video_status,  coordinate_list)
@@ -566,7 +584,7 @@ class ConvoAid(QWidget):
             self.current_chunk_number += 1
         
         except Exception as e:
-            append_system_message(f"Error during transcription: {str(e)}", self. _area)
+            append_system_message(f"Error during transcription: {str(e)}", self.Transcripts_area)
         finally:
             
             self.stt_running = False  # Reset flag

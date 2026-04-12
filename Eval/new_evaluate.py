@@ -1,19 +1,31 @@
 # Abalation study: with or without audio transcript to the video
 
-import os 
-from openai import OpenAI, OpenAIError
-from dotenv import load_dotenv
-import re
-# from video_process import process_video_combined
-from llm_grades import get_llm_grade
-from generate_answer import generate_answer, build_db
-from video_process_without_audio import process_video_combined, extract_and_transcribe_audio
-from add_transcripts import add_transcripts
-
+import argparse
+import os
 import json
 import shutil
-from RAG_LLM.RAG.rag import RAG_pipeline
 import ast
+
+try:
+    from .llm_grades import get_llm_grade
+    from .generate_answer import build_db
+    from .path_config import (
+        default_answer_file,
+        default_analysis_dir,
+        default_question_file,
+        ensure_dir,
+        ensure_file,
+    )
+except ImportError:
+    from llm_grades import get_llm_grade
+    from generate_answer import build_db
+    from path_config import (
+        default_answer_file,
+        default_analysis_dir,
+        default_question_file,
+        ensure_dir,
+        ensure_file,
+    )
 
 CP = ['Video Style', 'Video Scene', 'Video Emotion', 'Video Topic' ] # Coarse_Perception
 HL = ['Hallucination'] # Hallucination
@@ -40,11 +52,13 @@ for subcategory in All_category:
     scores_dict[subcategory] = []
     
     
-question_file = "/home/mingyang/video_benchmark/MMBench-Video/MMBench-Video_q.json"
-answer_file = "/home/mingyang/video_benchmark/MMBench-Video/MMBench-Video_a.json"
-
-QUESTION_NUM = 500
-START_NUM = 0
+DEFAULT_QUESTION_FILE = str(default_question_file())
+DEFAULT_ANSWER_FILE = str(default_answer_file())
+DEFAULT_ANALYSIS_SOURCE = str(default_analysis_dir("video_analysis_output"))
+DEFAULT_START_NUM = int(os.getenv("EVAL_START_NUM", "0"))
+DEFAULT_QUESTION_NUM = int(os.getenv("EVAL_QUESTION_NUM", "500"))
+DEFAULT_CHUNK_SIZE = int(os.getenv("EVAL_CHUNK_SIZE", "2048"))
+DEFAULT_K_FOR_RAG = int(os.getenv("EVAL_K_FOR_RAG", "3"))
 
 
 
@@ -97,7 +111,15 @@ def clean_db_and_source(docs_dir='docs/', analysis_dir='./video_analysis_output'
 
 
 
-def benchmark(START_NUM: int, QUESTION_NUM: int, question_file, answer_file) -> None:
+def benchmark(
+    start_num: int,
+    question_num: int,
+    question_file: str,
+    answer_file: str,
+    analysis_source: str,
+    chunk_size: int,
+    k_for_rag: int,
+) -> None:
     """
     Benchmark the performance of the Conversational Aid System (CAS) in video understanding tasks.
     """
@@ -118,17 +140,19 @@ def benchmark(START_NUM: int, QUESTION_NUM: int, question_file, answer_file) -> 
     processed_video = 0
     clean_db_and_source()
     
-    for i in range(START_NUM, QUESTION_NUM):
+    end_index = min(question_num, len(question_data))
+    for i in range(start_num, end_index):
         
         video_name = question_data[i]['video_name']
         
         if video_name != current_video:
             # If the video name has changed, clean the database and source files
-            
-            video_path = "/home/mingyang/video_benchmark/MMBench-Video/video/" + video_name + ".mp4"
-            # process_video_combined(video_path)    
-            add_transcripts(video_path)
-            analyzer = build_db(video_name)
+
+            analyzer = build_db(
+                video_name,
+                base_dir=analysis_source,
+                chunk_size=chunk_size,
+            )
             current_video = video_name
             processed_video += 1
         
@@ -148,6 +172,7 @@ def benchmark(START_NUM: int, QUESTION_NUM: int, question_file, answer_file) -> 
                 
         # Load the questions from the question file
 
+        std_answer = ""
         for item in answer_data:
             # Check if the item is a dictionary and has the 'question_id' key
             if isinstance(item, dict):
@@ -162,7 +187,7 @@ def benchmark(START_NUM: int, QUESTION_NUM: int, question_file, answer_file) -> 
                     # return std_answer        
         
         # Generate the answer for the user-provided question
-        llm_answer,_,_,_ = analyzer.generate_answer(question, k=3)
+        llm_answer,_,_,_ = analyzer.generate_answer(question, k=k_for_rag)
         # llm_answer = generate_answer(question, video_name)
         print(f"LLM Answer: {llm_answer}")
         
@@ -202,7 +227,41 @@ def load_or_initialize_scores(scores_file='scores_results.json'):
 # # for i in range(QUESTION_NUM):
 
 if __name__ == "__main__":
-    # Load questions from the question file
+    parser = argparse.ArgumentParser(description="Run alternate MMBench video evaluation.")
+    parser.add_argument("--question-file", default=DEFAULT_QUESTION_FILE)
+    parser.add_argument("--answer-file", default=DEFAULT_ANSWER_FILE)
+    parser.add_argument("--analysis-source", default=DEFAULT_ANALYSIS_SOURCE)
+    parser.add_argument("--start-num", type=int, default=DEFAULT_START_NUM)
+    parser.add_argument("--question-num", type=int, default=DEFAULT_QUESTION_NUM)
+    parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
+    parser.add_argument("--k-for-rag", type=int, default=DEFAULT_K_FOR_RAG)
+    args = parser.parse_args()
 
-    # Run the benchmark using the loaded questions
-    benchmark(START_NUM, QUESTION_NUM, question_file, answer_file)
+    question_file = ensure_file(
+        args.question_file,
+        "Question JSON",
+        "--question-file",
+        "MMBENCH_Q_JSON",
+    )
+    answer_file = ensure_file(
+        args.answer_file,
+        "Answer JSON",
+        "--answer-file",
+        "MMBENCH_A_JSON",
+    )
+    analysis_source = ensure_dir(
+        args.analysis_source,
+        "Video analysis source",
+        "--analysis-source",
+        "EVAL_ANALYSIS_DIR",
+    )
+
+    benchmark(
+        start_num=args.start_num,
+        question_num=args.question_num,
+        question_file=question_file,
+        answer_file=answer_file,
+        analysis_source=analysis_source,
+        chunk_size=args.chunk_size,
+        k_for_rag=args.k_for_rag,
+    )

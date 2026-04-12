@@ -1,6 +1,12 @@
+import argparse
 import pickle
 import os
 import huggingface_hub
+
+try:
+    from .path_config import default_dataset_root
+except ImportError:
+    from path_config import default_dataset_root
 
 
 def unwrap_hf_pkl(pth, suffix='.mp4'):
@@ -23,5 +29,11 @@ def unwrap_hf_pkl(pth, suffix='.mp4'):
     else:
         print('The video file already exists.')
 if __name__ == '__main__':
-    # pkl_file = 'video_chunk_0.pkl'  # Replace with your actual .pkl file name
-    unwrap_hf_pkl("./MMBench-Video")
+    parser = argparse.ArgumentParser(description="Restore benchmark videos from pickled chunks.")
+    parser.add_argument(
+        "--dataset-root",
+        default=str(default_dataset_root()),
+        help="Directory containing video_pkl/ and where video/ will be written.",
+    )
+    args = parser.parse_args()
+    unwrap_hf_pkl(args.dataset_root)

@@ -1,235 +1,178 @@
-import sys
 import os
+import queue
 import subprocess
 import threading
-import queue
 import textwrap
 import time
-import glob
 
-from PyQt6.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QPushButton,
-    QLabel,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
-from PyQt6.QtCore import QThread, pyqtSignal, QTimer, Qt
-
-# Google STT 
-from google.cloud import speech
-from google.oauth2 import service_account
-
-# PDF saving
+from PyQt6.QtCore import QThread, pyqtSignal
 from fpdf import FPDF
 
-# ============ Global ============
-api_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "api")
-CREDENTIAL_PATH = glob.glob(os.path.join(api_dir, "*.json"))[0]
-
-if not CREDENTIAL_PATH:
-    raise FileNotFoundError("No JSON credential file was found in the ./api directory.")
+from stt_providers.assemblyai_provider import RealtimeAssemblyAISession
 
 
+STOP_STREAM_AFTER_SECONDS = 240
+CHUNK_SIZE = 4096
+SAMPLE_RATE = 16000
 
-STOP_STREAM_AFTER_SECONDS = 240         
-CHUNK_SIZE = 4096                       
-SAMPLE_RATE = 16000                    
 
-# ============ Threading ============
-class RealTimeStreamingTranscriptionThread(QThread):   
+class RealTimeStreamingTranscriptionThread(QThread):
     """
-    Use ffmpeg to read audio from MP4 file, then use Google Cloud Speech-to-Text's
-    'streaming_recognize' for real-time transcription, automatically segmenting to avoid
+    Read PCM audio from ffmpeg and stream to AssemblyAI realtime STT.
+    Preserves existing PyQt signal contract for GUI integration.
     """
-    # Define the signals
-    transcript_update = pyqtSignal(str)      # When new transcript is available
-    status_update = pyqtSignal(str)          # When status updates are needed
-    finished_processing = pyqtSignal()       # When processing is finished
+
+    transcript_update = pyqtSignal(str)
+    status_update = pyqtSignal(str)
+    finished_processing = pyqtSignal()
 
     def __init__(self, mp4_file_path: str, parent=None):
         super().__init__(parent)
         self.mp4_file_path = mp4_file_path
-        self._stop_flag = False  
-        self.md_filename = os.path.basename(mp4_file_path).replace(".mp4", ".md")
-        self.md_file_path = os.path.join("./source", self.md_filename)        
-        
-        # Credential path should be set in the environment variable or directly here
-        self.credentials = service_account.Credentials.from_service_account_file(
-            CREDENTIAL_PATH
-        )
-        self.client = speech.SpeechClient(credentials=self.credentials)
-
-        # Outpu PDF file name
-        self.chunk_index = 1
-        self.global_transcript = ""  
-
-        # Control chunk
+        self._stop_flag = False
+        self._reader_finished = False
         self.chunk_stop = threading.Event()
 
+        self.chunk_index = 1
+        self.md_filename = os.path.basename(mp4_file_path).replace(".mp4", ".md")
+        self.md_file_path = os.path.join("./source", self.md_filename)
+
     def stop(self):
-        """
-        Call this method to stop the transcription thread gracefully.
-        """
         self._stop_flag = True
         self.chunk_stop.set()
 
     def run(self):
-        """
-        QThread main function.
-        """
         if not os.path.isfile(self.mp4_file_path):
-            self.status_update.emit(f"Error: File not exit {self.mp4_file_path}")
+            self.status_update.emit(f"Error: file does not exist {self.mp4_file_path}")
             self.finished_processing.emit()
             return
 
-        # Send initial status update
+        os.makedirs("./source", exist_ok=True)
         self.status_update.emit("Start processing...")
 
-        # Prepare the audio queue
         audio_queue = queue.Queue()
 
-        # Read ffmpeg Audio in subprocess thread
         reader_thread = threading.Thread(
             target=self._read_from_ffmpeg,
             args=(self.mp4_file_path, audio_queue),
-            daemon=True
+            daemon=True,
         )
         reader_thread.start()
 
-
-        # Do chunk recognition until the audio is fully read or manually stopped
         try:
             while not self._stop_flag:
                 self.chunk_stop.clear()
                 pdf_filename = f"transcription_chunk_{self.chunk_index}.pdf"
 
-                # Start recognizing the current chunk
                 self._recognize_chunk(audio_queue, pdf_filename)
                 self.chunk_index += 1
 
-            
-                if self._stop_flag:
-                    break
-
-                
-                if not reader_thread.is_alive() and audio_queue.empty():
+                if self._reader_finished and audio_queue.empty():
                     self.status_update.emit("Audio reading finished.")
                     break
 
-            # Wait for the reader thread to finish
-            reader_thread.join()
-        except Exception as e:
-            self.status_update.emit(f"Error during transcript: {e}")
+            reader_thread.join(timeout=3)
+        except Exception as exc:
+            self.status_update.emit(f"Error during transcription: {exc}")
         finally:
-            # Send finished_processing signal 
             self.status_update.emit("Processing finished.")
             self.finished_processing.emit()
 
     def _read_from_ffmpeg(self, mp4_file_path, audio_queue):
-        """
-        Call ffmpeg and convert mp4 to PCM , put into audio_queue。
-        Unit files finish reading or stop_flag is True。
-        """
         cmd = [
             "ffmpeg",
-            "-i", mp4_file_path,
-            "-f", "s16le",  # 
-            "-acodec", "pcm_s16le",
-            "-ar", str(SAMPLE_RATE),
-            "-ac", "1",
+            "-i",
+            mp4_file_path,
+            "-f",
+            "s16le",
+            "-acodec",
+            "pcm_s16le",
+            "-ar",
+            str(SAMPLE_RATE),
+            "-ac",
+            "1",
             "-vn",
-            "-"  
+            "-",
         ]
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
 
-        while not self._stop_flag:
-            data = process.stdout.read(CHUNK_SIZE)
-            if not data:
-                break
-            audio_queue.put(data)
-            
-            duration = CHUNK_SIZE / (SAMPLE_RATE * 2)  
-            time.sleep(duration)
+        try:
+            while not self._stop_flag:
+                data = process.stdout.read(CHUNK_SIZE)
+                if not data:
+                    break
 
-        process.stdout.close()
-        process.wait()
-
-        self._stop_flag = True  
+                audio_queue.put(data)
+                duration_seconds = CHUNK_SIZE / (SAMPLE_RATE * 2)
+                time.sleep(duration_seconds)
+        finally:
+            if process.stdout:
+                process.stdout.close()
+            process.wait()
+            self._reader_finished = True
 
     def _recognize_chunk(self, audio_queue, pdf_filename: str):
-        """
-        Do streaming recognition for a single "chunk" of audio, with a time limit set by STOP_STREAM_AFTER_SECONDS.
-        """
+        timer = threading.Timer(STOP_STREAM_AFTER_SECONDS, lambda: self.chunk_stop.set())
+        timer.start()
 
+        local_lines = []
 
-        # Define a timer to automatically stop the current chunk recognition
-        timer = QTimer()
-        timer.setSingleShot(True)
+        def handle_final_turn(text: str) -> None:
+            recognized_text = text.strip()
+            if not recognized_text:
+                return
 
-        # Using lambda to set chunk_stop when the timer times out
-        timer.timeout.connect(lambda: self.chunk_stop.set())
-        timer.start(STOP_STREAM_AFTER_SECONDS * 1000)
+            local_lines.append(recognized_text)
+            with open(self.md_file_path, "a", encoding="utf-8") as md_file:
+                md_file.write("Transcript:")
+                md_file.write(recognized_text + "\n")
+            self.transcript_update.emit(recognized_text)
 
-        # streaming_config
-        config = speech.RecognitionConfig(
-            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-            sample_rate_hertz=SAMPLE_RATE,
-            language_code="en-US",  # Set your language here
-            enable_automatic_punctuation=True
-        )
-        streaming_config = speech.StreamingRecognitionConfig(
-            config=config,
-            interim_results=True  #
+        session = RealtimeAssemblyAISession(
+            sample_rate=SAMPLE_RATE,
+            on_final=handle_final_turn,
+            on_error=lambda err: self.status_update.emit(f"Realtime STT error: {err}"),
         )
 
-        local_transcript = ""
+        try:
+            session.start()
 
-        def request_generator():
-            """
-            Generate streaming requests from the audio queue.
-            """
-            while not self.chunk_stop.is_set():
+            while not self.chunk_stop.is_set() and not self._stop_flag:
                 try:
                     data = audio_queue.get(timeout=0.5)
-                    yield speech.StreamingRecognizeRequest(audio_content=data)
                 except queue.Empty:
-                    # If the queue is empty, check if we should stop
-                    if self._stop_flag:
+                    if self._reader_finished and audio_queue.empty():
                         break
                     continue
 
-        # Start streaming_recognize
-        responses = self.client.streaming_recognize(
-            streaming_config,
-            requests=request_generator()
-        )
-
-        # Process the responses
-        try:
-            for response in responses:
-                if self.chunk_stop.is_set():
-                    break
-                for result in response.results:
-                    if result.is_final:
-                        recognized_text = result.alternatives[0].transcript
-                        local_transcript += recognized_text + "\n"
-                        
-                        with open(self.md_file_path, "a", encoding = "utf-8") as md_file:
-                            md_file.write("Transcript:")
-                            md_file.write(recognized_text + "\n")
-                        # Send a signal to update the main window
-                        self.transcript_update.emit(recognized_text)
-        except Exception as e:
-            self.status_update.emit(f"[分段 {self.chunk_index}] 识别异常: {e}")
+                try:
+                    session.stream(data)
+                except Exception as exc:
+                    self.status_update.emit(f"Streaming error: {exc}")
+                    self.chunk_stop.set()
+                finally:
+                    try:
+                        audio_queue.task_done()
+                    except ValueError:
+                        pass
         finally:
-            # Stop the timer
-            timer.stop()
+            timer.cancel()
+            session.close()
+
+            if local_lines:
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("Arial", size=12)
+                merged = "\n".join(local_lines)
+                safe_text = merged.encode("latin-1", "replace").decode("latin-1")
+                wrapped = textwrap.fill(safe_text, width=90)
+                pdf.multi_cell(0, 10, wrapped)
+                pdf.output(os.path.join("./source", pdf_filename))
 
             with audio_queue.mutex:
                 audio_queue.queue.clear()
-
-

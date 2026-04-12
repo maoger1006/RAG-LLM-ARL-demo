@@ -13,3 +13,4 @@ tiktoken
 chromadb
 PyQt6
 google-cloud-speech
+websocket-client

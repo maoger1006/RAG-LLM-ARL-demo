@@ -1,6 +1,12 @@
+import argparse
 import json
 import os
 import numpy as np
+
+try:
+    from .path_config import default_question_file, ensure_file
+except ImportError:
+    from path_config import default_question_file, ensure_file
 
 
 def count_unique_video_names(json_file_path: str) -> int:
@@ -49,5 +55,18 @@ def count_unique_video_names(json_file_path: str) -> int:
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         return 0
-    
-count_unique_video_names("/home/mingyang/video_benchmark/MMBench-Video/MMBench-Video_q.json")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Count unique video_name values in a benchmark JSON file.")
+    parser.add_argument("--question-file", default=str(default_question_file()))
+    args = parser.parse_args()
+
+    question_file = ensure_file(
+        args.question_file,
+        "Question JSON",
+        "--question-file",
+        "MMBENCH_Q_JSON",
+    )
+    unique_count = count_unique_video_names(question_file)
+    print(f"Unique video count: {unique_count}")

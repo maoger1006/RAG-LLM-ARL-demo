@@ -3,13 +3,22 @@ import openai
 import sys
 from dotenv import load_dotenv, find_dotenv
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+try:
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+except ModuleNotFoundError:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
 from transformers import AutoTokenizer
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
-from langchain.prompts import PromptTemplate
+try:
+    from langchain.prompts import PromptTemplate
+except ModuleNotFoundError:
+    from langchain_core.prompts import PromptTemplate
 from langchain_community.chat_models import ChatOpenAI
-from langchain.chains import RetrievalQA
+try:
+    from langchain.chains import RetrievalQA
+except ModuleNotFoundError:
+    from langchain_classic.chains import RetrievalQA
 import warnings
 warnings.filterwarnings("ignore")
 import time
@@ -263,10 +272,19 @@ def main():
     analyzer = RAG_pipeline()
 
     # Load the documents
-    pdf_file_path = "./source/"
-    pdf_files = pdf_file_path
-    # pdf_files = [pdf_file_path+"reviewer_1.pdf", pdf_file_path+"reviewer_2.pdf"]  # Add other PDFs if needed
-    docs = analyzer.load_documents(pdf_files)
+    source_dir = "./source"
+    supported_ext = {".pdf", ".md", ".txt"}
+    input_files = [
+        os.path.join(source_dir, name)
+        for name in sorted(os.listdir(source_dir))
+        if os.path.splitext(name)[1].lower() in supported_ext
+    ]
+    if not input_files:
+        raise FileNotFoundError(
+            f"No supported source files found in {source_dir}. Add .pdf, .md, or .txt files first."
+        )
+
+    docs = analyzer.load_documents(input_files)
 
     # Split documents into smaller chunks
     splits = analyzer.split_documents(docs, chunk_size=2048)
@@ -276,16 +294,19 @@ def main():
     k = vectordb._collection.count()
 
     # Build the QA chain
-    analyzer.build_qa_chain()
+    analyzer.build_qa_chain("concise mode")
 
     # Ask user for the question
     user_question = input("Please enter your question: ")
 
     # Generate the answer for the user-provided question
-    answer, similarity_score = analyzer.generate_answer(user_question, k=k)
+    answer, similarity_scores, source_pdfs, elapsed = analyzer.generate_answer(user_question, k=k)
 
     # Print the result
     print(f"Answer: {answer}")
+    print(f"Similarity scores: {similarity_scores}")
+    print(f"Sources: {source_pdfs}")
+    print(f"Latency: {elapsed:.2f}s")
 
 if __name__ == "__main__":
     main()

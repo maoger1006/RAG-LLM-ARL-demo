@@ -2,8 +2,9 @@ import os
 from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
 from marker.output import save_output
-from file_conversion.Imagett import image_to_pdf, image_to_txt
-# from Imagett import image_to_pdf
+from file_conversion.Imagett import image_to_txt
+
+
 def extract_text_and_images(pdf_path):
         
     converter = PdfConverter(

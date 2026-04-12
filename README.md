@@ -24,7 +24,8 @@
 
 5. Add your keys:  
    * Paste the **OpenAI** key into a `.env` file (`OPENAI_API_KEY=...`).  
-   * Create an `./api` folder and drop your Google credentials JSON inside.
+    * Add your **AssemblyAI** key in `.env` (`ASSEMBLY_AI_KEY=...`).
+    * (Optional, legacy path) Create an `./api` folder and drop your Google credentials JSON inside.
 
 > **Notice** – Before uploading `.docx`, `.pptx`, or `.xlsx` files, save and close any other work to avoid data‑loss.
 
@@ -78,9 +79,12 @@ If `pyaudio` still fails, double‑check that `portaudio19-dev` is installed.
 # OpenAI key
 echo "OPENAI_API_KEY=sk-YOURKEYHERE" > .env
 
-# Google credentials
-mkdir -p api
-cp ~/Downloads/your-google-creds.json api/
+# AssemblyAI key (default)
+echo "ASSEMBLY_AI_KEY=your_assemblyai_key" >> .env
+
+# Optional legacy Google credentials
+# mkdir -p api
+# cp ~/Downloads/your-google-creds.json api/
 ```
 ### 5  Replace the Office‑to‑PDF helper (Linux only)
 
@@ -167,6 +171,61 @@ def office_to_pdf(file_path: str, destination_dir: str = "./source") -> Path:
 ```bash
 python gui_beta.py
 ```
+
+## Benchmark Dataset Layout (Portable)
+
+For benchmark/evaluation scripts, use this repo-local layout (recommended):
+
+```text
+RAG-LLM-ARL-demo/
+    datasets/
+        MMBench-Video/
+            MMBench-Video_q.json
+            MMBench-Video_a.json
+            video/
+                *.mp4
+```
+
+Where to put benchmark videos:
+- Put your benchmark `.mp4` files in `datasets/MMBench-Video/video/`.
+- If your data is elsewhere on your machine, pass paths with CLI args or env vars (below).
+
+### Environment variables (optional)
+
+```bash
+export MMBENCH_VIDEO_ROOT=/absolute/path/to/MMBench-Video
+export MMBENCH_Q_JSON=/absolute/path/to/MMBench-Video_q.json
+export MMBENCH_A_JSON=/absolute/path/to/MMBench-Video_a.json
+export EVAL_ANALYSIS_DIR=/absolute/path/to/video_analysis_output
+```
+
+### Run Eval scripts without hardcoded paths
+
+```bash
+python Eval/evaluate.py \
+    --question-file /path/to/MMBench-Video_q.json \
+    --answer-file /path/to/MMBench-Video_a.json \
+    --analysis-source /path/to/video_analysis_output
+
+python Eval/evaluate_async.py \
+    --question-file /path/to/MMBench-Video_q.json \
+    --answer-file /path/to/MMBench-Video_a.json \
+    --analysis-source /path/to/video_analysis_output_with_audio_1fps_all
+
+python Eval/new_evaluate.py \
+    --question-file /path/to/MMBench-Video_q.json \
+    --answer-file /path/to/MMBench-Video_a.json \
+    --analysis-source /path/to/video_analysis_output
+```
+
+### Run video processing on a local file
+
+```bash
+python file_conversion/video_process.py /absolute/path/to/video.mp4
+python file_conversion/video_process_async.py /absolute/path/to/video.mp4 --output-dir ./source
+```
+
+Both video processing scripts also support `VIDEO_FILE` env var.
 
 ### 6  File‑conversion notes
 

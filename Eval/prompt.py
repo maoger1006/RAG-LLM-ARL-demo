@@ -1,4 +1,4 @@
-# /home/mingyang/video_benchmark/exp_results/scores_results_all_with_audio_k=5_finetuned(prompt2).json  （prompt2）
+# Prompt variant: speculative answer mode.
 prompt_template = """You are an assistant answering questions based primarily on the provided context.
                 Instructions:
                 0.  You should answer the question concisely and directly based on the context within one sentence.
@@ -30,8 +30,7 @@ prompt_template = """You are an assistant answering questions based primarily on
 
                     ### **Response**
                     """""
-# prompt used for the LLM to generate the answer
-#/home/mingyang/video_benchmark/exp_results/scores_results_all_with_audio_k=5_finetuned(prompt).json   (prompt1)
+# Prompt variant: aggressive best-guess mode.
 prompt_template = """You are an assistant answering questions based primarily on the provided context.
                 Instructions:
                 0.  You should answer the question concisely and directly based on the context within one sentence.

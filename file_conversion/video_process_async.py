@@ -1,6 +1,7 @@
 import cv2
 import base64
 import os
+import argparse
 import openai
 import time
 from dotenv import load_dotenv
@@ -246,16 +247,30 @@ async def process_video_combined_async(video_path: str, output_dir: str = DEFAUL
 
 
 if __name__ == "__main__":
-    start_time = time.time()
-    # Replace with the path to your video file
-    video_to_process = "C:\\Users\\22770\\OneDrive - Johns Hopkins\\GitHub\\RAG-LLM-ARL-demo-2\\Test_files\\ucIDF_ZHdhY.mp4"
+    parser = argparse.ArgumentParser(description="Run async combined video analysis on a local file.")
+    parser.add_argument(
+        "video_file",
+        nargs="?",
+        default=os.getenv("VIDEO_FILE"),
+        help="Path to local video file. Can also be provided via VIDEO_FILE env var.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=os.getenv("VIDEO_OUTPUT_DIR", DEFAULT_OUTPUT_DIR),
+        help="Directory for generated analysis files.",
+    )
+    args = parser.parse_args()
 
-    if os.path.exists(video_to_process):
-        print(f"\n--- Starting Combined Processing for: {video_to_process} ---")
-        asyncio.run(process_video_combined_async(video_to_process))
-        print("\n--- Processing Finished ---")
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        print(f"Processing completed in {elapsed_time:.2f} seconds.")
-    else:
-        print(f"\nSkipping example: Video file '{video_to_process}' not found.")  
+    if not args.video_file:
+        raise SystemExit("Provide a video path as an argument or set VIDEO_FILE.")
+
+    if not os.path.isfile(args.video_file):
+        raise FileNotFoundError(f"Video file not found: {args.video_file}")
+
+    start_time = time.time()
+    print(f"\n--- Starting Combined Processing for: {args.video_file} ---")
+    asyncio.run(process_video_combined_async(args.video_file, output_dir=args.output_dir))
+    print("\n--- Processing Finished ---")
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"Processing completed in {elapsed_time:.2f} seconds.")
