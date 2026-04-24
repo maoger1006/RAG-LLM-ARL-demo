@@ -3,13 +3,12 @@ import openai
 import sys
 from dotenv import load_dotenv, find_dotenv
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from transformers import AutoTokenizer
 from langchain_community.vectorstores import Chroma
-from langchain_openai import OpenAIEmbeddings
-from langchain.prompts import PromptTemplate
-from langchain_community.chat_models import ChatOpenAI
-from langchain.chains import RetrievalQA
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 import warnings
 warnings.filterwarnings("ignore")
 import time
@@ -156,13 +155,12 @@ class RAG_pipeline:
                       
         self.QA_CHAIN_PROMPT = PromptTemplate.from_template(prompt_template)
         llm = ChatOpenAI(model_name=self.llm_name, temperature=0.4)
+        parser = StrOutputParser()
 
-        self.qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            retriever=self.vector_db.as_retriever(),
-            return_source_documents=True,
-            chain_type_kwargs={"prompt": self.QA_CHAIN_PROMPT}
-        )
+        def _qa_chain(inputs, _llm=llm, _parser=parser):
+            return {"result": _parser.invoke(_llm.invoke(inputs["query"]))}
+
+        self.qa_chain = _qa_chain
         
         
     def build_qa_chain_correct(self):
@@ -202,13 +200,12 @@ class RAG_pipeline:
                       
         self.QA_CHAIN_PROMPT = PromptTemplate.from_template(prompt_template)
         llm = ChatOpenAI(model_name=self.llm_name, temperature=0.0)
+        parser = StrOutputParser()
 
-        self.qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            retriever=self.vector_db.as_retriever(),
-            return_source_documents=True,
-            chain_type_kwargs={"prompt": self.QA_CHAIN_PROMPT}
-        )
+        def _qa_chain(inputs, _llm=llm, _parser=parser):
+            return {"result": _parser.invoke(_llm.invoke(inputs["query"]))}
+
+        self.qa_chain = _qa_chain
     
     
     def generate_answer(self, format_question, k=3):

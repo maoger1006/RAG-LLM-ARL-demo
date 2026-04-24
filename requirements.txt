@@ -3,8 +3,10 @@ docx2pdf
 fpdf
 langchain
 langchain_community
+langchain_core
 langchain_neo4j
 langchain_openai
+langchain_text_splitters
 marker-pdf
 matplotlib
 matplotlib_venn
@@ -14,7 +16,7 @@ numpy
 openai
 opencv_python
 opencv_python_headless
-playsound
+playsound==1.2.2
 protobuf
 PyAudio
 pydub
@@ -28,3 +30,5 @@ SpeechRecognition
 transformers
 google-cloud-speech
 git+https://github.com/openai/whisper.git 
+aiofiles
+hume

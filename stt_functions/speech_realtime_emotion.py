@@ -15,6 +15,7 @@ Before running:
 import os, sys, glob, queue, threading, textwrap, tempfile, wave, asyncio
 from collections import deque
 from datetime import datetime
+from dotenv import load_dotenv
 
 import pyaudio
 from fpdf import FPDF
@@ -34,12 +35,13 @@ PDF_OUTDIR         = "./source"
 
 # ─────────────────────── Credentials ────────────────────────── #
 
+load_dotenv()
 api_dir    = os.path.join(os.path.dirname(os.path.dirname(__file__)), "api")
 json_files = glob.glob(os.path.join(api_dir, "*.json"))
 if not json_files:
     raise FileNotFoundError("No JSON credential file was found in the ./api directory.")
 credential = service_account.Credentials.from_service_account_file(json_files[0])
-HUME_API_KEY = "" # Replace with your Hume API key or set as an environment variable
+HUME_API_KEY = os.environ.get("HUME_API_KEY", "")
 if not HUME_API_KEY:
     raise EnvironmentError("Set HUME_API_KEY in your environment.")
 
@@ -60,11 +62,9 @@ threading.Thread(target=_run_emotion_loop, args=(emotion_loop,), daemon=True).st
 # ──────────────────── Hume.ai helper ────────────────────────── #
 
 from hume import AsyncHumeClient
-from hume.expression_measurement.stream  import Config
-from hume.expression_measurement.stream.socket_client import StreamConnectOptions
+from hume.expression_measurement.stream.stream.types import Config
 hume_client = AsyncHumeClient(api_key=HUME_API_KEY)
 hume_model_config = Config(prosody={})
-hume_stream_opts  = StreamConnectOptions(config=hume_model_config)
 
 async def analyse_emotion_async(audio_bytes: bytes) -> str:
     """
@@ -73,9 +73,7 @@ async def analyse_emotion_async(audio_bytes: bytes) -> str:
     """
 
     try:
-        async with hume_client.expression_measurement.stream.connect(
-            options=hume_stream_opts
-        ) as socket:
+        async with hume_client.expression_measurement.stream.stream.connect() as socket:
 
             # ── 1. choose the right send-method ─────────────────────────
             # if hasattr(socket, "send_bytes"):               # old StreamSocket
@@ -89,7 +87,7 @@ async def analyse_emotion_async(audio_bytes: bytes) -> str:
                 await fp.write(audio_bytes)
                 tmp_path = fp.name
             try:
-                result = await socket.send_file(tmp_path)
+                result = await socket.send_file(tmp_path, config=hume_model_config)
             finally:
                 os.remove(tmp_path)
 
