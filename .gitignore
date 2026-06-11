@@ -1,4 +1,35 @@
+# ===== key =====
 .env
-./api
-__pycache__
-./api/helical-casing-419019-288bbbf13cfd.json
+.env.*
+api/
+certs/
+*-credentials.json
+*service-account*.json
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===== frontend (Node / Vite) =====
+frontend/node_modules/
+frontend/dist/
+node_modules/
+dist/
+
+# ===== data =====
+source/
+docs/
+
+# ===== IDE =====
+.vscode/
+.idea/
+.DS_Store
+*.swp

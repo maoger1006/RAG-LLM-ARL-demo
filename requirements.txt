@@ -1,25 +1,25 @@
 chromadb
 docx2pdf
 fpdf
-langchain
-langchain_community
-langchain_neo4j
-langchain_openai
-marker-pdf
+# speech-prosody emotion detection in conversation mode (needs HUME_API_KEY)
+hume
+# langchain 1.x removed the APIs RAG/rag.py uses; stay on the 0.3 line
+langchain>=0.3,<0.4
+langchain_community>=0.3,<0.4
+langchain_neo4j<0.5
+langchain_openai>=0.3,<0.4
+# must match the patched marker copy in ./vendor/mypackage (surya-ocr 0.14)
+marker-pdf==1.7.5
 matplotlib
 matplotlib_venn
-neo4j
-neo4j_graphrag
 numpy
 openai
 opencv_python
 opencv_python_headless
-playsound
+playsound==1.2.2
 protobuf==3.20.0
 PyAudio
 pydub
-PyQt6
-PyQt6_sip
 python-dotenv
 pyttsx3
 Requests
@@ -27,3 +27,8 @@ SpeechRecognition
 transformers
 google-cloud-speech
 git+https://github.com/openai/whisper.git
+# --- web UI backend (React frontend) ---
+fastapi
+uvicorn[standard]
+python-multipart
+websockets

@@ -1,7 +1,17 @@
 import os
-from vendor.mypackage.marker.converters.pdf import PdfConverter
-from vendor.mypackage.marker.models import create_model_dict
-from vendor.mypackage.marker.output import save_output
+import sys
+
+# The patched marker copy in ./vendor/mypackage refers to itself with plain
+# `marker.*` imports, so it must shadow the pip-installed marker-pdf package.
+_VENDOR_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "vendor", "mypackage"
+)
+if _VENDOR_DIR not in sys.path:
+    sys.path.insert(0, _VENDOR_DIR)
+
+from marker.converters.pdf import PdfConverter
+from marker.models import create_model_dict
+from marker.output import save_output
 from file_conversion.Imagett import image_to_txt
 # from Imagett import image_to_pdf
 def extract_text_and_images(pdf_path):

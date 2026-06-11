@@ -1,5 +1,106 @@
 # RAG-LLM-ARL-demo
 
+## Web UI (React frontend) — recommended
+
+The original PyQt6 GUI (`gui_beta.py`) has been refactored into a browser app:
+a **FastAPI** backend (`backend/`) wraps the existing RAG / STT / video
+pipelines and pushes realtime updates over WebSocket, and a **React (Vite)**
+frontend (`frontend/`) reproduces the same layout (Transcripts | Q&A | Video
+panels, control bar, push-to-talk, ROI selection on video, keyboard
+shortcuts). The PyQt version still works and is untouched.
+
+### 1  One-time setup
+
+```bash
+# Python deps (same venv/conda env as before)
+pip install -r requirements.txt          # now also installs fastapi/uvicorn
+
+# Build the frontend (requires Node.js >= 18)
+cd frontend
+npm install
+npm run build
+cd ..
+```
+
+Keys are configured exactly like the PyQt version: `OPENAI_API_KEY` in `.env`,
+Google credential JSON in `./api/`.
+
+Optional: add `HUME_API_KEY=...` to `.env` to enable speech-prosody emotion
+detection in conversation mode — each recognized question is tagged with the
+top Hume.ai emotion (`[Emotion: Curiosity]`) so the LLM can adapt its answer;
+the Q&A panel shows the label as a chip. Without the key the feature is
+silently disabled.
+
+### 2  Run
+
+```bash
+python run_web.py        # serves API + built frontend on http://127.0.0.1:8000
+```
+
+If port 8000 is taken, pick another one: `WEB_PORT=8800 python run_web.py`.
+
+**Audio is browser-side**: the microphone is captured in the browser and
+streamed to the backend over WebSocket for Google streaming STT, and
+Read-Aloud answers are synthesized server-side (OpenAI TTS) but played by
+the browser. The machine running the backend needs no sound hardware.
+
+Browsers only expose the microphone on secure origins (`https://` or
+`http://localhost`), so the rule of thumb is simple — **always open the app
+as `http://localhost:<port>`** and the microphone just works, no
+certificates needed:
+
+* **Backend on this machine (local run):** open
+  `http://localhost:8000` (or your `WEB_PORT`) directly. Done.
+
+* **Backend on a remote machine:** forward the port so it *becomes*
+  localhost on your laptop — pick one:
+
+  * **VS Code Remote-SSH (easiest).** Open the **PORTS** panel (next to
+    the terminal), *Forward a Port* → e.g. `8800`, then open
+    `http://localhost:8800` on your laptop. Ports started from a VS Code
+    integrated terminal are usually forwarded automatically. Forwarding
+    rides the existing SSH connection, so it also works when a network
+    firewall blocks the port itself.
+  * **Plain SSH tunnel** (same mechanism without VS Code):
+    `ssh -L 8800:localhost:8800 user@server`, then `http://localhost:8800`.
+
+* **Remote without any tunnel (direct HTTPS)** — only works if the network
+  firewall lets you reach the port. Generate a self-signed certificate once
+  on the server:
+
+  ```bash
+  mkdir -p certs
+  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+      -keyout certs/server.key -out certs/server.crt -subj "/CN=multi-rag"
+  ```
+
+  `run_web.py` detects `./certs` automatically, switches to HTTPS and
+  listens on all interfaces — open `https://<server-ip>:<port>` and accept
+  the certificate warning once (Advanced → Proceed). Anyone on your network
+  can then reach the app, so use it on trusted LANs only. Set `WEB_SSL=0`
+  to ignore the certificates and serve plain localhost HTTP again (do this
+  when you switch back to tunneled/local access).
+
+While STT is running, a **Share Speaker Audio** button appears: share a
+tab/screen *with audio* (Chrome/Edge) and that audio is transcribed as the
+"Speaker" channel, which also feeds the Correct Content checker.
+
+### 3  Frontend development mode (hot reload)
+
+```bash
+uvicorn backend.main:app --reload        # terminal 1: API on :8000
+cd frontend && npm run dev               # terminal 2: UI on :5173 (proxies to :8000)
+```
+
+### Keyboard shortcuts (same as PyQt)
+
+`Space` toggle STT · `C` conversation · `R` read aloud · `A` correct content ·
+`D` retrieval · `T` detail mode · `Y` concise mode · `S` summary · `E` exit ·
+hold `Enter` (or the Voice Input button) for push-to-talk. Shortcuts are
+inactive while typing in the question box.
+
+---
+
 ## Run with Virtual Env (Windows / conda example)
 
 1. Create a conda environment (Python 3.11.7 is recommended):  
