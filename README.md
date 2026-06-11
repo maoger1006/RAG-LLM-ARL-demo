@@ -147,6 +147,7 @@ converter and PortAudio fixes. Follow these steps:
 sudo apt update
 sudo apt install -y   python3.11 python3.11-venv build-essential   # Python 3.11 + compiler toolchain
 sudo apt install -y   portaudio19-dev libportaudio2 libportaudiocpp0  # headers for PyAudio
+sudo apt install -y   espeak libespeak1                              # runtime for pyttsx3 TTS
 sudo apt install -y   libreoffice libreoffice-core fonts-liberation   # headless Office → PDF
 ```
 
@@ -172,6 +173,19 @@ pip install -r requirements.txt
 ```
 
 If `pyaudio` still fails, double‑check that `portaudio19-dev` is installed.
+
+> **Notice** – If `playsound` fails to build with
+> `OSError: could not get source code` while *Getting requirements to build
+> wheel*, that is a known bug in the unmaintained `playsound 1.3.0` sdist
+> (its `setup.py` breaks under modern setuptools, regardless of Python
+> version — reproduced on 3.11.7). Pin the last version that ships a wheel:
+>
+> ```bash
+> pip install playsound==1.2.2
+> ```
+>
+> or change the `playsound` line in `requirements.txt` to
+> `playsound==1.2.2` and re-run `pip install -r requirements.txt`.
 
 ### 4  Project setup
 
@@ -276,10 +290,17 @@ python gui_beta.py
 * Converted PDFs are moved to `./source/`.
 * No more `win32com` / `pywin32` is required.
 
-### 7  Playing nicely with Python 3.12+
+### 7  Playing nicely with `playsound`
 
-`playsound==1.3.0` does not build on 3.12. If you upgrade, pin the maintained
-fork instead:
+`playsound==1.3.0` (the version pip resolves by default) fails to build with
+modern setuptools on any recent Python — 3.11 included, not just 3.12+. Pin
+the wheel-only release instead:
+
+```bash
+pip install playsound==1.2.2
+```
+
+If you ever need a maintained drop-in replacement, the fork also works:
 
 ```bash
 pip install playsound@git+https://github.com/taconi/playsound
