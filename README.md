@@ -1,6 +1,86 @@
 # RAG-LLM-ARL-demo
 
-## Web UI (React frontend) — recommended
+## Run with Docker — easiest
+
+The whole web app (FastAPI backend + built React frontend + ffmpeg +
+LibreOffice + CPU PyTorch) is packaged into a single image. You need
+[Docker](https://docs.docker.com/engine/install/) with the Compose v2 plugin —
+no Python, Node, conda or system packages on the host.
+
+### 1  One-time setup
+
+```bash
+# OpenAI key (required) — Hume key optional, enables emotion detection
+echo "OPENAI_API_KEY=sk-YOURKEYHERE" > .env
+
+# Google Cloud credentials (required only for microphone / video STT)
+mkdir -p api
+cp ~/Downloads/your-google-creds.json api/
+```
+
+Secrets stay on the host: `.dockerignore` keeps `.env` and `api/` out of the
+image; the key is injected as an environment variable and the credential JSON
+is bind-mounted read-only at runtime.
+
+### 2  Build & run
+
+```bash
+docker compose up --build        # first build takes a while (apt + pip deps)
+```
+
+Open **http://localhost:8000**. Browsers only expose the microphone on secure
+origins, so always use `http://localhost:8000` (or tunnel the port — see the
+[Web UI section](#2--run) below). If port 8000 is taken, change the host port
+in the `ports:` mapping in `docker-compose.yml` (e.g. `"127.0.0.1:8800:8000"`).
+
+> **Security** — the app has **no authentication**: anyone who can reach the
+> port can read live transcripts and Q&A, download every uploaded document,
+> spend your OpenAI credits and wipe/stop the server. That is why the compose
+> file publishes the port on `127.0.0.1` only. For remote use prefer an SSH
+> tunnel (`ssh -L 8000:localhost:8000 user@server`); only publish on all
+> interfaces (`"8000:8000"`) on a network you trust.
+
+Notes:
+
+* **First PDF upload** downloads the surya OCR models (~2 GB) into the
+  `model_cache` volume; the **first mp4** downloads whisper `base` (~140 MB).
+  Both survive rebuilds. To pre-warm the caches:
+
+  ```bash
+  docker compose exec app python -c "import sys; sys.path.insert(0, 'vendor/mypackage'); from marker.models import create_model_dict; create_model_dict()"
+  docker compose exec app python -c "import whisper; whisper.load_model('base')"
+  ```
+
+* **GPU (optional)** — only speeds up local OCR/whisper; the LLM, embeddings,
+  TTS and streaming STT are remote APIs. Requires the NVIDIA driver +
+  `nvidia-container-toolkit` on the host:
+
+  ```bash
+  docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+  ```
+
+* **Remote access without a tunnel** — generate the self-signed certificate
+  into `./certs` (openssl one-liner in the [Web UI section](#2--run)), then in
+  `docker-compose.yml` uncomment the `./certs:/app/certs:ro` line **and**
+  change the port mapping to `"8000:8000"` (this exposes the unauthenticated
+  API to the network — see the security note above). Re-run
+  `docker compose up -d` to recreate the container (a plain
+  `docker compose restart` does **not** pick up compose-file changes): the
+  server switches to HTTPS automatically and the microphone works from
+  `https://<server-ip>:8000`.
+
+* **Exit button**: the in-app Exit wipes the upload workspace and vector DB
+  and stops the server — by design. With `restart: unless-stopped` the
+  container comes back with a fresh, empty workspace.
+
+* `constraints.docker.txt` freezes the pip dependency resolution that is known
+  to work (e.g. the `protobuf==3.20.0` pin needs `google-cloud-speech 2.15.1`).
+  If you change `requirements.txt`, regenerate it — the command is in the file
+  header.
+
+---
+
+## Web UI (React frontend) — manual setup
 
 The original PyQt6 GUI (`gui_beta.py`) has been refactored into a browser app:
 a **FastAPI** backend (`backend/`) wraps the existing RAG / STT / video
@@ -197,85 +277,12 @@ echo "OPENAI_API_KEY=sk-YOURKEYHERE" > .env
 mkdir -p api
 cp ~/Downloads/your-google-creds.json api/
 ```
-### 5  Replace the Office‑to‑PDF helper (Linux only)
+### 5  Office-to-PDF helper — already Linux-ready
 
-win32com does not exist on Linux. Replace its usage with the LibreOffice
-version below once per clone:
-
-    Open file_conversion/office_2_pdf.py in your editor.
-
-    Delete its contents and paste the code block below.
-
-    Save the file – no other modules need to change.
-
-```python
-# file_conversion/office_2_pdf.py
-import subprocess
-import shlex
-from pathlib import Path
-import shutil
-from fpdf import FPDF   # already in requirements
-
-def office_to_pdf(file_path: str, destination_dir: str = "./source") -> Path:
-    """
-    Convert an Office, PowerPoint, Excel or plain-text file to PDF on Linux/macOS.
-    Uses LibreOffice (--headless --convert-to pdf) for everything except .txt,
-    which is rendered with FPDF.  Returns the final PDF Path.
-
-    Dependencies (Ubuntu):
-        sudo apt install libreoffice libreoffice-core libreoffice-writer libreoffice-calc libreoffice-impress
-        sudo apt install fonts-liberation   # avoids blank glyphs in PDFs
-    """
-    in_path = Path(file_path).expanduser().resolve()
-    if not in_path.exists():
-        raise FileNotFoundError(in_path)
-
-    ext = in_path.suffix.lower()
-    out_dir = in_path.parent        # LibreOffice writes here by default
-    pdf_path = in_path.with_suffix(".pdf")
-
-    try:
-        # ── 1. Plain-text → PDF with FPDF ────────────────────────────────
-        if ext == ".txt":
-            pdf = FPDF()
-            pdf.set_auto_page_break(auto=True, margin=15)
-            pdf.add_page()
-            pdf.set_font("Helvetica", size=12)
-
-            with open(in_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    safe = line.encode("latin-1", errors="ignore").decode("latin-1")
-                    pdf.multi_cell(0, 8, txt=safe.strip())
-
-            pdf.output(str(pdf_path))
-
-        # ── 2. All other Office docs → PDF with LibreOffice ──────────────
-        else:
-            # libreoffice --headless --convert-to pdf <file> --outdir <dir>
-            cmd = (
-                "libreoffice --headless --convert-to pdf "
-                f"{shlex.quote(str(in_path))} --outdir {shlex.quote(str(out_dir))}"
-            )
-            result = subprocess.run(
-                cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-            if result.returncode != 0:
-                raise RuntimeError(result.stderr.decode() or result.stdout.decode())
-
-        # ── 3. Move PDF into ./source/  ───────────────────────────────────
-        dest_dir = Path(destination_dir).resolve()
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        final_path = dest_dir / pdf_path.name
-        shutil.move(pdf_path, final_path)
-
-        print(f"PDF created → {final_path}")
-        return final_path
-
-    except Exception as e:
-        raise RuntimeError(f"Error converting {in_path.name} → PDF: {e}") from e
-
-
-```
+`file_conversion/office_2_pdf.py` already ships the LibreOffice/FPDF-based
+converter (no more `win32com`/`pywin32`), so **no manual edits are needed**
+on a fresh clone — just make sure the LibreOffice packages from step 1 are
+installed.
 
 ### 6  Run the GUI
 
@@ -283,14 +290,14 @@ def office_to_pdf(file_path: str, destination_dir: str = "./source") -> Path:
 python gui_beta.py
 ```
 
-### 6  File‑conversion notes
+### 7  File‑conversion notes
 
 * `file_conversion/office_2_pdf.py` now calls **LibreOffice** in headless mode
   – ensure the packages in step 1 are installed.
 * Converted PDFs are moved to `./source/`.
 * No more `win32com` / `pywin32` is required.
 
-### 7  Playing nicely with `playsound`
+### 8  Playing nicely with `playsound`
 
 `playsound==1.3.0` (the version pip resolves by default) fails to build with
 modern setuptools on any recent Python — 3.11 included, not just 3.12+. Pin
@@ -304,31 +311,6 @@ If you ever need a maintained drop-in replacement, the fork also works:
 
 ```bash
 pip install playsound@git+https://github.com/taconi/playsound
-```
-
----
-
-## Required tweak in `pdf_split.py`
-
-Open `pdf_split.py`, locate the `save_output` function and replace the existing
-implementation with the version below to avoid JSON metadata write errors and
-ensure images are saved correctly:
-
-```python
-def save_output(rendered: BaseModel, output_dir: str, fname_base: str):
-    text, ext, images = text_from_rendered(rendered)
-    text = text.encode(settings.OUTPUT_ENCODING, errors='replace').decode(
-        settings.OUTPUT_ENCODING)
-
-    with open(os.path.join(output_dir, f"{fname_base}.{ext}"), "w+",
-              encoding=settings.OUTPUT_ENCODING) as f:
-        f.write(text)
-
-    for img_name, img in images.items():
-        img.save(os.path.join(output_dir, f"{fname_base}{img_name}"),
-                 settings.OUTPUT_IMAGE_FORMAT)
-
-    return images
 ```
 
 ---

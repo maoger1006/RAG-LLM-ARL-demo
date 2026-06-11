@@ -1,0 +1,40 @@
+# Multi-RAG web app — CPU image (GPU: add -f docker-compose.gpu.yml, see README).
+#
+# One-time setup before `docker compose up --build`:
+#   1. .env in the repo root with OPENAI_API_KEY=... (+ optional HUME_API_KEY=...)
+#   2. ./api/ containing your Google Cloud service-account JSON (any filename)
+# Then open http://localhost:8000 — the browser microphone only works on
+# localhost or HTTPS (see the certs mount below for remote access).
+
+services:
+  app:
+    build: .
+    image: rag-llm-arl-demo
+    # Bound to localhost on purpose: the API has NO authentication — anyone
+    # who can reach the port can read live transcripts, download uploaded
+    # documents, spend your OpenAI credits and wipe/stop the server. For
+    # remote access prefer an SSH tunnel / authenticating reverse proxy; only
+    # change to "8000:8000" (all interfaces) on a trusted network.
+    ports:
+      - "127.0.0.1:8000:8000"  # host:container — change the left port if 8000 is taken
+    # Keys are injected as environment variables; the image itself contains no
+    # .env file (and must never — the app's load_dotenv(override=True) would
+    # silently override these values if a .env were mounted into /app).
+    env_file:
+      - .env
+    volumes:
+      # Google service-account JSON, discovered by glob ./api/*.json — needed
+      # for microphone / video speech-to-text; everything else works without it
+      - ./api:/app/api:ro
+      # model caches: surya OCR (~2 GB, first PDF upload), whisper base
+      # (~140 MB, first mp4), HF tokenizer — survive image rebuilds
+      - model_cache:/root/.cache
+      # optional: self-signed TLS pair (certs/server.crt + server.key) enables
+      # auto-HTTPS for remote-browser microphone access — see README
+      # - ./certs:/app/certs:ro
+    # the in-app Exit button wipes ./source + ./docs and stops the server by
+    # design; restart brings back a fresh, empty workspace
+    restart: unless-stopped
+
+volumes:
+  model_cache:

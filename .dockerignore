@@ -1,0 +1,51 @@
+# NOTE: unlike .gitignore, .dockerignore patterns are anchored to the context
+# root — recursive matches need an explicit **/ prefix.
+
+# ===== secrets — NEVER enter the build context =====
+# (.env holds live API keys; api/ holds the Google service-account private key.
+#  Both are injected at runtime instead: env_file + bind mount in compose.)
+**/.env
+**/.env.*
+api/
+certs/
+**/*-credentials.json
+**/*service-account*.json
+**/*.pem
+**/*.key
+
+# ===== VCS / virtualenvs =====
+.git
+.gitignore
+.venv/
+venv/
+env/
+
+# ===== runtime workspace (the app creates these itself) =====
+source/
+docs/
+
+# ===== frontend build artifacts (rebuilt inside the node stage) =====
+frontend/node_modules/
+frontend/dist/
+
+# ===== Python caches =====
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===== desktop-GUI-only / dev-only =====
+Test_files/
+.vscode/
+.idea/
+.claude/
+.DS_Store
+*.swp
+
+# ===== docker files themselves (not needed inside the image) =====
+Dockerfile
+docker-compose*.yml
+.dockerignore

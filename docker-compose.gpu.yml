@@ -1,0 +1,22 @@
+# GPU override — CUDA torch wheels + NVIDIA runtime for faster marker/surya
+# OCR (PDF uploads) and whisper (offline mp4 transcription). Everything else
+# (LLM, embeddings, TTS, streaming STT) is remote API and gains nothing.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+#
+# Host requirements: NVIDIA driver + nvidia-container-toolkit.
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        # the regular PyPI index ships CUDA-enabled torch wheels on linux/x86_64
+        TORCH_INDEX_URL: https://pypi.org/simple
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

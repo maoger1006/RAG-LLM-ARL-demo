@@ -232,7 +232,7 @@ def process_upload(state, bus, file_path):
             Imagett.image_to_txt(file_path)
             refresh_rag(state, bus)
         elif file_path.endswith((".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt")):
-            office_2_pdf.office_2_pdf(file_path)
+            office_2_pdf.office_to_pdf(file_path)
             refresh_rag(state, bus)
         elif file_path.endswith((".txt", ".md")):
             refresh_rag(state, bus)

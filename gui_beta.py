@@ -612,7 +612,7 @@ class ConvoAid(QWidget):
             self.ask_llm()
             
         elif file_path.endswith((".docx" , ".doc" , ".xlsx" , ".xls" , ".pptx" , ".ppt")):
-            office_2_pdf.office_2_pdf(file_path)
+            office_2_pdf.office_to_pdf(file_path)
             self.ask_llm()
             
         elif file_path.endswith(".mp4"):
